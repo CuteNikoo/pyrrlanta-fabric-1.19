@@ -7,8 +7,8 @@ NeoForge version feature by feature.
 
 ## Requirements
 
-- JDK 17 (Gradle will auto-download one via its toolchain support if you
-  don't have it — you don't need to install it manually).
+- JDK 21 to run Gradle/Loom (the mod itself still compiles down to Java 17
+  bytecode, matching what Minecraft 1.19.2 requires at runtime).
 - Any Java IDE with Gradle support. IntelliJ IDEA is the most common choice
   for Fabric development.
 
