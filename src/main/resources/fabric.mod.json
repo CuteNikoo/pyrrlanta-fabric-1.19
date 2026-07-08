@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "pyrrlanta",
+	"version": "${version}",
+	"name": "Pyrrlanta",
+	"description": "Pyrrlanta - a Fabric port for Minecraft 1.19.2.",
+	"authors": [
+		"CuteNikoo"
+	],
+	"contact": {
+		"homepage": "https://github.com/CuteNikoo/pyrrlanta-fabric-1.19",
+		"sources": "https://github.com/CuteNikoo/pyrrlanta-fabric-1.19"
+	},
+	"license": "MIT",
+	"icon": "assets/pyrrlanta/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.pyrrlanta.pyrrlanta.Pyrrlanta"
+		],
+		"client": [
+			"com.pyrrlanta.pyrrlanta.client.PyrrlantaClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~1.19.2",
+		"java": ">=17",
+		"fabric-api": "*"
+	}
+}
