@@ -22,6 +22,9 @@
 			"com.pyrrlanta.pyrrlanta.client.PyrrlantaClient"
 		]
 	},
+	"mixins": [
+		"pyrrlanta.mixins.json"
+	],
 	"depends": {
 		"fabricloader": ">=0.19.3",
 		"minecraft": "~1.19.2",
