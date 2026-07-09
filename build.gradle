@@ -12,6 +12,15 @@ repositories {
 	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
 	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
 	// for more information about repositories.
+	maven {
+		// The bluemap-api versions still on repo.bluecolored.de (2.7.3+) are compiled for
+		// Java 21, incompatible with this project's Java 17 target -- and BlueMap's last
+		// Fabric build supporting Minecraft 1.19.2 (v3.13-fabric-1.19) targets the older,
+		// no-longer-published bluemap-api 2.5.0, so that historical tag is pulled from
+		// JitPack (which builds directly from the BlueMapAPI GitHub repo on demand) instead.
+		name = 'JitPack'
+		url = 'https://jitpack.io'
+	}
 }
 
 loom {
@@ -33,6 +42,12 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Optional: if BlueMap is present, tribe claims are drawn on the web map. Not required to
+	// run the mod. Version 2.5.0 matches the API targeted by BlueMap's last Fabric build that
+	// still supports Minecraft 1.19.2 (v3.13-fabric-1.19); pulled from JitPack since it's no
+	// longer published on repo.bluecolored.de (only newer, Java-21-only versions remain there).
+	compileOnly 'com.github.BlueMap-Minecraft:BlueMapAPI:v2.5.0'
 }
 
 processResources {
