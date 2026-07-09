@@ -155,8 +155,13 @@ public final class TribeMapIntegration {
             HtmlMarker nameLabel = HtmlMarker.builder()
                     .label(tribe.getName())
                     .position(new Vector3d(centroid.getX(), MARKER_HEIGHT, centroid.getY()))
+                    // BlueMap's anchor is a fixed pixel offset from the element's own top-left
+                    // corner, which we can't know in advance since it depends on the rendered
+                    // text length -- CSS transform: translate(-50%,-50%) centers the element on
+                    // its own actual rendered size instead, correct for any tribe name length.
                     .html("<div style=\"color:#fff;background:rgba(0,0,0,0.55);padding:2px 6px;"
-                            + "border-radius:3px;white-space:nowrap;font-weight:bold;pointer-events:none;\">"
+                            + "border-radius:3px;white-space:nowrap;font-weight:bold;pointer-events:none;"
+                            + "transform:translate(-50%,-50%);\">"
                             + safeName + "</div>")
                     .anchor(0, 0)
                     .build();
