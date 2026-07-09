@@ -15,9 +15,15 @@ import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -47,7 +53,9 @@ public final class TribeCommand {
                 .then(Commands.literal("deposit")
                         .executes(ctx -> deposit(ctx.getSource(), -1))
                         .then(Commands.argument("amount", IntegerArgumentType.integer(1))
-                                .executes(ctx -> deposit(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "amount")))))
+                                .executes(ctx -> deposit(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "amount"))))
+                        .then(Commands.literal("all")
+                                .executes(ctx -> depositAll(ctx.getSource()))))
                 .then(Commands.literal("invite")
                         .then(Commands.argument("player", GameProfileArgument.gameProfile())
                                 .executes(ctx -> invite(ctx.getSource(), resolveProfile(ctx, "player")))))
@@ -300,6 +308,48 @@ public final class TribeCommand {
         tribe.setTreasury(tribe.getTreasury() + value);
         data.setDirty();
         source.sendSuccess(Component.literal("Deposited " + toDeposit + " " + itemName + " for " + value
+                + " ore. Treasury: " + tribe.getTreasury() + "."), true);
+        return 1;
+    }
+
+    // Sweeps the player's whole inventory (main slots + hotbar + offhand) for accepted ore
+    // items, not just what's held in the main hand. Armor slots are skipped -- iron/gold
+    // ingots and diamonds can't be worn there anyway.
+    private static int depositAll(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        Tribe tribe = data.getTribeOf(player.getUUID());
+        if (tribe == null) {
+            source.sendFailure(NOT_IN_TRIBE);
+            return 0;
+        }
+        Inventory inventory = player.getInventory();
+        List<ItemStack> slots = new ArrayList<>(inventory.items);
+        slots.addAll(inventory.offhand);
+
+        int totalValue = 0;
+        Map<Item, Integer> deposited = new LinkedHashMap<>();
+        for (ItemStack stack : slots) {
+            if (stack.isEmpty() || !TribeEconomy.isAccepted(stack.getItem())) {
+                continue;
+            }
+            int count = stack.getCount();
+            totalValue += TribeEconomy.valueOf(stack.getItem()) * count;
+            deposited.merge(stack.getItem(), count, Integer::sum);
+            stack.shrink(count);
+        }
+
+        if (deposited.isEmpty()) {
+            source.sendFailure(Component.literal("You have no iron ingots, gold ingots, or diamonds to deposit."));
+            return 0;
+        }
+
+        tribe.setTreasury(tribe.getTreasury() + totalValue);
+        data.setDirty();
+        String breakdown = deposited.entrySet().stream()
+                .map(e -> e.getValue() + " " + e.getKey().getDescription().getString())
+                .collect(Collectors.joining(", "));
+        source.sendSuccess(Component.literal("Deposited " + breakdown + " for " + totalValue
                 + " ore. Treasury: " + tribe.getTreasury() + "."), true);
         return 1;
     }
