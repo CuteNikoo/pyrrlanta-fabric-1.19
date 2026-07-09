@@ -132,7 +132,13 @@ public final class TribeMapIntegration {
                     .fillColor(fill)
                     .lineColor(line)
                     .lineWidth(2)
-                    .detail(detail);
+                    .detail(detail)
+                    // ShapeMarker defaults depthTest to true, which occludes the flat marker
+                    // wherever real terrain height exceeds MARKER_HEIGHT anywhere under it --
+                    // easy to hit once many chunks are merged into one large shape. Disabling
+                    // it renders the outline above terrain unconditionally, which is what an
+                    // informational territory overlay should do regardless of terrain height.
+                    .depthTestEnabled(false);
             if (!holes.isEmpty()) {
                 Shape[] holeShapes = new Shape[holes.size()];
                 for (int i = 0; i < holes.size(); i++) {
