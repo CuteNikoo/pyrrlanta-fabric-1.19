@@ -22,10 +22,16 @@
 			"com.pyrrlanta.pyrrlanta.client.PyrrlantaClient"
 		]
 	},
+	"mixins": [
+		"pyrrlanta.mixins.json"
+	],
 	"depends": {
-		"fabricloader": ">=0.19.3",
+		"fabricloader": ">=0.14.9",
 		"minecraft": "~1.19.2",
 		"java": ">=17",
 		"fabric-api": "*"
+	},
+	"recommends": {
+		"bluemap": "*"
 	}
 }
