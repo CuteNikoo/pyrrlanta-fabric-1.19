@@ -71,6 +71,7 @@ public class TribeMenu extends ChestMenu {
 
     private void handleClick(int slotId) {
         switch (slotId) {
+            case 0 -> TribeTierMenu.openFor(viewer, tribe, data);
             case 18 -> doClaim();
             case 19 -> doUnclaim();
             case 20 -> doSetHome();
@@ -259,7 +260,7 @@ public class TribeMenu extends ChestMenu {
     private void populate() {
         TribeTier tier = TribeTier.of(tribe);
         setSlot(4, named(Items.BOOK, tribe.getName() + " - Leader: " + leaderName()));
-        setSlot(0, named(Items.NETHER_STAR, "Tier " + tier.number() + ": " + tier.displayName()));
+        setSlot(0, named(Items.NETHER_STAR, "Tier " + tier.number() + ": " + tier.displayName() + " (click for tiers)"));
 
         setSlot(11, named(Items.PLAYER_HEAD, "Members: " + tribe.getMembers().size()));
         setSlot(13, named(Items.GRASS_BLOCK, "Claims: " + tribe.getClaims().size() + claimsLimitSuffix()));

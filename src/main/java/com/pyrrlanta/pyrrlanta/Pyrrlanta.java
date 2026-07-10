@@ -1,7 +1,6 @@
 package com.pyrrlanta.pyrrlanta;
 
 import com.pyrrlanta.pyrrlanta.tribe.TribeCommand;
-import com.pyrrlanta.pyrrlanta.tribe.TribeFireGuard;
 import com.pyrrlanta.pyrrlanta.tribe.TribeForceLoad;
 import com.pyrrlanta.pyrrlanta.tribe.TribeMapIntegration;
 import com.pyrrlanta.pyrrlanta.tribe.TribeMessageEvents;
@@ -31,7 +30,6 @@ public class Pyrrlanta implements ModInitializer {
 		TribeCommand.init();
 		TribeProtectionEvents.init();
 		TribeMessageEvents.init();
-		TribeFireGuard.init();
 		TribeTaxCollector.init();
 		TribeForceLoad.init();
 		TribeTierEffects.init();

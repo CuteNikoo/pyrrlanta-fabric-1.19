@@ -106,6 +106,10 @@ public final class TribeCommand {
                                 .executes(ctx -> info(ctx.getSource(), StringArgumentType.getString(ctx, "name")))))
                 .then(Commands.literal("list")
                         .executes(ctx -> list(ctx.getSource())))
+                .then(Commands.literal("top")
+                        .executes(ctx -> top(ctx.getSource())))
+                .then(Commands.literal("balance")
+                        .executes(ctx -> balance(ctx.getSource())))
                 .then(Commands.literal("map")
                         .executes(ctx -> map(ctx.getSource())))
                 .then(Commands.literal("gui")
@@ -758,6 +762,37 @@ public final class TribeCommand {
                 .map(t -> t.getName() + " (" + t.getMembers().size() + ")")
                 .collect(Collectors.joining(", "));
         source.sendSuccess(Component.literal("Tribes: " + names), false);
+        return 1;
+    }
+
+    // Leaderboard: tribes ranked by claim count (most land first), top 10.
+    private static int top(CommandSourceStack source) {
+        TribeSavedData data = data(source);
+        if (data.getAllTribes().isEmpty()) {
+            source.sendSuccess(Component.literal("There are no tribes yet."), false);
+            return 1;
+        }
+        StringBuilder sb = new StringBuilder("== Top tribes by claims ==");
+        int[] rank = {0};
+        data.getAllTribes().stream()
+                .sorted((a, b) -> Integer.compare(b.getClaims().size(), a.getClaims().size()))
+                .limit(10)
+                .forEach(t -> sb.append("\n").append(++rank[0]).append(". ").append(t.getName())
+                        .append(" — ").append(t.getClaims().size()).append(" chunks (Tier ")
+                        .append(TribeTier.of(t).number()).append(")"));
+        source.sendSuccess(Component.literal(sb.toString()), false);
+        return 1;
+    }
+
+    private static int balance(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        Tribe tribe = data.getTribeOf(player.getUUID());
+        if (tribe == null) {
+            source.sendFailure(NOT_IN_TRIBE);
+            return 0;
+        }
+        source.sendSuccess(Component.literal(tribe.getName() + " treasury: " + tribe.getTreasury() + " ore."), false);
         return 1;
     }
 
