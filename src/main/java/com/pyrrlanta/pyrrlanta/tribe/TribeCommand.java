@@ -93,6 +93,13 @@ public final class TribeCommand {
                 .then(Commands.literal("autoclaim")
                         .then(Commands.argument("value", BoolArgumentType.bool())
                                 .executes(ctx -> autoclaim(ctx.getSource(), BoolArgumentType.getBool(ctx, "value")))))
+                .then(Commands.literal("forceload")
+                        .then(Commands.literal("add")
+                                .executes(ctx -> forceload(ctx.getSource(), ForceloadAction.ADD)))
+                        .then(Commands.literal("remove")
+                                .executes(ctx -> forceload(ctx.getSource(), ForceloadAction.REMOVE)))
+                        .then(Commands.literal("list")
+                                .executes(ctx -> forceload(ctx.getSource(), ForceloadAction.LIST))))
                 .then(Commands.literal("info")
                         .executes(ctx -> info(ctx.getSource(), null))
                         .then(Commands.argument("name", StringArgumentType.word())
@@ -652,6 +659,45 @@ public final class TribeCommand {
         return 1;
     }
 
+    private enum ForceloadAction {
+        ADD, REMOVE, LIST
+    }
+
+    private static int forceload(CommandSourceStack source, ForceloadAction action) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        Tribe tribe = data.getTribeOf(player.getUUID());
+        if (tribe == null) {
+            source.sendFailure(NOT_IN_TRIBE);
+            return 0;
+        }
+        int limit = TribeTier.of(tribe).forceLoadLimit();
+        if (action == ForceloadAction.LIST) {
+            var forced = TribeForceLoad.list(tribe);
+            if (forced.isEmpty()) {
+                source.sendSuccess(Component.literal("No chunks are set to force-load ("
+                        + forced.size() + "/" + limit + " used)."), false);
+                return 1;
+            }
+            String listed = forced.stream()
+                    .map(pos -> pos.chunk().x + ", " + pos.chunk().z)
+                    .collect(Collectors.joining("; "));
+            source.sendSuccess(Component.literal("Force-loaded chunks (" + forced.size() + "/" + limit
+                    + "): " + listed), false);
+            return 1;
+        }
+        if (!tribe.hasPermission(player.getUUID(), TribeRole.OFFICER)) {
+            source.sendFailure(Component.literal("Only officers and the leader can change force-loaded chunks."));
+            return 0;
+        }
+        ClaimPos here = ClaimPos.of(player.getLevel(), player.blockPosition());
+        String result = action == ForceloadAction.ADD
+                ? TribeForceLoad.designate(source.getServer(), data, tribe, here)
+                : TribeForceLoad.undesignate(source.getServer(), data, tribe, here);
+        source.sendSuccess(Component.literal(result), true);
+        return 1;
+    }
+
     private static int info(CommandSourceStack source, String name) throws CommandSyntaxException {
         TribeSavedData data = data(source);
         Tribe tribe;
@@ -669,8 +715,17 @@ public final class TribeCommand {
                 return 0;
             }
         }
+        TribeTier tier = TribeTier.of(tribe);
+        TribeTier nextTier = tier.next();
+        String progress = nextTier == null
+                ? "Max tier reached."
+                : "Next: Tier " + nextTier.number() + " " + nextTier.displayName()
+                        + " needs " + nextTier.minMembers() + " members & " + nextTier.minChunks() + " chunks.";
         source.sendSuccess(Component.literal(
                 "== " + tribe.getName() + " ==\n"
+                        + "Tier " + tier.number() + ": " + tier.displayName() + "\n"
+                        + "Passive: " + tier.passive() + "\n"
+                        + progress + "\n"
                         + "Leader: " + playerName(source, tribe.getLeader()) + "\n"
                         + "Members: " + tribe.getMembers().size() + "\n"
                         + "Claims: " + tribe.getClaims().size() + "\n"
