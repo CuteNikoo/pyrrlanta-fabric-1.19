@@ -57,9 +57,16 @@ public enum TribeTier {
     // thresholds are monotonic, this walks from the top down and returns the first match;
     // ENCAMPMENT always qualifies (a tribe always has at least its leader).
     public static TribeTier of(Tribe tribe) {
+        // A debug override (/tribe admin settier) forces an exact tier for testing, bypassing
+        // the requirements entirely -- including forcing a lower tier than earned, to verify
+        // passives switch off. 0 means no override.
+        int override = tribe.getDebugTierOverride();
+        TribeTier[] tiers = values();
+        if (override >= 1 && override <= tiers.length) {
+            return tiers[override - 1];
+        }
         int members = tribe.getMembers().size();
         int chunks = tribe.getClaims().size();
-        TribeTier[] tiers = values();
         for (int i = tiers.length - 1; i >= 0; i--) {
             TribeTier tier = tiers[i];
             if (members >= tier.minMembers && chunks >= tier.minChunks) {

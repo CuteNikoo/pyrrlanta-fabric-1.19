@@ -57,6 +57,11 @@ public class Tribe {
     // tier-up milestones are broadcast once rather than every time the tier is recomputed.
     private int announcedTier = 1;
 
+    // Debug/admin tier override (/tribe admin settier). 0 = no override (tier is computed from
+    // members/claims); 1-5 forces exactly that tier for testing. Persisted so an override
+    // survives a restart mid-test; cleared with /tribe admin cleartier.
+    private int debugTierOverride = 0;
+
     // Home location. homeDimension == null means no home has been set.
     private ResourceKey<Level> homeDimension;
     private double homeX;
@@ -237,6 +242,14 @@ public class Tribe {
         this.announcedTier = announcedTier;
     }
 
+    public int getDebugTierOverride() {
+        return debugTierOverride;
+    }
+
+    public void setDebugTierOverride(int debugTierOverride) {
+        this.debugTierOverride = debugTierOverride;
+    }
+
     public boolean hasHome() {
         return homeDimension != null;
     }
@@ -329,6 +342,7 @@ public class Tribe {
         }
         tag.put("forcedChunks", forcedTag);
         tag.putInt("announcedTier", announcedTier);
+        tag.putInt("debugTierOverride", debugTierOverride);
 
         if (hasHome()) {
             CompoundTag homeTag = new CompoundTag();
@@ -387,6 +401,7 @@ public class Tribe {
             tribe.forcedChunks.add(ClaimPos.load((CompoundTag) t));
         }
         tribe.announcedTier = tag.contains("announcedTier") ? tag.getInt("announcedTier") : 1;
+        tribe.debugTierOverride = tag.getInt("debugTierOverride");
 
         if (tag.contains("home")) {
             CompoundTag homeTag = tag.getCompound("home");

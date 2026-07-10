@@ -149,7 +149,12 @@ public final class TribeCommand {
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("delete")
                                 .then(Commands.argument("name", StringArgumentType.word())
-                                        .executes(ctx -> adminDelete(ctx.getSource(), StringArgumentType.getString(ctx, "name"))))))
+                                        .executes(ctx -> adminDelete(ctx.getSource(), StringArgumentType.getString(ctx, "name")))))
+                        .then(Commands.literal("settier")
+                                .then(Commands.argument("tier", IntegerArgumentType.integer(1, 5))
+                                        .executes(ctx -> adminSetTier(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "tier")))))
+                        .then(Commands.literal("cleartier")
+                                .executes(ctx -> adminClearTier(ctx.getSource()))))
         );
     }
 
@@ -721,9 +726,11 @@ public final class TribeCommand {
                 ? "Max tier reached."
                 : "Next: Tier " + nextTier.number() + " " + nextTier.displayName()
                         + " needs " + nextTier.minMembers() + " members & " + nextTier.minChunks() + " chunks.";
+        String tierLine = "Tier " + tier.number() + ": " + tier.displayName()
+                + (tribe.getDebugTierOverride() != 0 ? " [debug override]" : "");
         source.sendSuccess(Component.literal(
                 "== " + tribe.getName() + " ==\n"
-                        + "Tier " + tier.number() + ": " + tier.displayName() + "\n"
+                        + tierLine + "\n"
                         + "Passive: " + tier.passive() + "\n"
                         + progress + "\n"
                         + "Leader: " + playerName(source, tribe.getLeader()) + "\n"
@@ -903,6 +910,53 @@ public final class TribeCommand {
         }
         data.deleteTribe(tribe);
         source.sendSuccess(Component.literal("Deleted tribe '" + name + "'."), true);
+        return 1;
+    }
+
+    // Debug: force the admin's own tribe to a specific tier so its passives can be tested
+    // without meeting the member/claim requirements. Also bumps announcedTier to the forced
+    // value so the fake tier-up isn't broadcast server-wide during testing.
+    private static int adminSetTier(CommandSourceStack source, int tier) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        Tribe tribe = data.getTribeOf(player.getUUID());
+        if (tribe == null) {
+            source.sendFailure(Component.literal("You must be in a tribe to set its tier. "
+                    + "Join or create one first, then run this in it."));
+            return 0;
+        }
+        tribe.setDebugTierOverride(tier);
+        if (tier > tribe.getAnnouncedTier()) {
+            tribe.setAnnouncedTier(tier);
+        }
+        data.setDirty();
+        TribeForceLoad.reconcile(source.getServer(), data, tribe);
+        TribeTier forced = TribeTier.of(tribe);
+        source.sendSuccess(Component.literal("[debug] " + tribe.getName() + " forced to Tier "
+                + forced.number() + " (" + forced.displayName() + "). Passive: " + forced.passive()
+                + " Use /tribe admin cleartier to revert."), true);
+        return 1;
+    }
+
+    // Debug: remove a tier override, returning the tribe to its normally computed tier.
+    private static int adminClearTier(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        Tribe tribe = data.getTribeOf(player.getUUID());
+        if (tribe == null) {
+            source.sendFailure(NOT_IN_TRIBE);
+            return 0;
+        }
+        if (tribe.getDebugTierOverride() == 0) {
+            source.sendFailure(Component.literal(tribe.getName() + " has no tier override set."));
+            return 0;
+        }
+        tribe.setDebugTierOverride(0);
+        data.setDirty();
+        TribeForceLoad.reconcile(source.getServer(), data, tribe);
+        TribeTier actual = TribeTier.of(tribe);
+        source.sendSuccess(Component.literal("[debug] Tier override cleared. " + tribe.getName()
+                + " is now Tier " + actual.number() + " (" + actual.displayName() + "), as earned."), true);
         return 1;
     }
 }
