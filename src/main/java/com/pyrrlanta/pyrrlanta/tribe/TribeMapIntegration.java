@@ -99,8 +99,11 @@ public final class TribeMapIntegration {
         Color fill = shade(tribe, 0.35f);
         Color line = shade(tribe, 0.9f);
         String safeName = escapeHtml(tribe.getName());
-        String detail = "<b>" + safeName + "</b><br>Members: " + tribe.getMembers().size()
-                + (tribe.isProtectionEnabled() ? "<br>Protected territory" : "<br>Open territory");
+        // Admin land is server-owned and memberless, so a member count would just read "0".
+        String detail = tribe.isAdminTribe()
+                ? "<b>" + safeName + "</b><br>Server-protected land"
+                : "<b>" + safeName + "</b><br>Members: " + tribe.getMembers().size()
+                        + (tribe.isProtectionEnabled() ? "<br>Protected territory" : "<br>Open territory");
 
         int regionIndex = 0;
         for (Set<ChunkPos> region : groupIntoConnectedRegions(claims)) {

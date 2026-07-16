@@ -32,10 +32,38 @@ public class TribeSavedData extends SavedData {
         return get(server.overworld());
     }
 
+    // Display name of the server-owned admin land tribe. The space is intentional: it reads
+    // well on the web map, and it also means name-based commands (which take a single word)
+    // can't accidentally target it -- e.g. /tribe admin delete can't remove admin land.
+    public static final String ADMIN_TRIBE_NAME = "Protected Land";
+
     public Tribe createTribe(String name, UUID leader) {
         Tribe tribe = new Tribe(UUID.randomUUID(), name, leader);
         tribes.put(tribe.getId(), tribe);
         memberIndex.put(leader, tribe.getId());
+        setDirty();
+        return tribe;
+    }
+
+    public Tribe getAdminTribe() {
+        for (Tribe tribe : tribes.values()) {
+            if (tribe.isAdminTribe()) {
+                return tribe;
+            }
+        }
+        return null;
+    }
+
+    // There is exactly one admin land tribe per world, created lazily on the first
+    // /tribe admin claim. It is never added to memberIndex -- it has no members by design, so
+    // getTribeOf() never returns it and admins keep their own tribes.
+    public Tribe getOrCreateAdminTribe() {
+        Tribe existing = getAdminTribe();
+        if (existing != null) {
+            return existing;
+        }
+        Tribe tribe = Tribe.createAdmin(UUID.randomUUID(), ADMIN_TRIBE_NAME);
+        tribes.put(tribe.getId(), tribe);
         setDirty();
         return tribe;
     }

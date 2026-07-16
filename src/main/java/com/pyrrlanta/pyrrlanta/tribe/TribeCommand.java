@@ -154,6 +154,10 @@ public final class TribeCommand {
                         .then(Commands.literal("delete")
                                 .then(Commands.argument("name", StringArgumentType.word())
                                         .executes(ctx -> adminDelete(ctx.getSource(), StringArgumentType.getString(ctx, "name")))))
+                        .then(Commands.literal("claim")
+                                .executes(ctx -> adminClaim(ctx.getSource())))
+                        .then(Commands.literal("unclaim")
+                                .executes(ctx -> adminUnclaim(ctx.getSource())))
                         .then(Commands.literal("settier")
                                 .then(Commands.argument("tier", IntegerArgumentType.integer(1, 5))
                                         .executes(ctx -> adminSetTier(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "tier")))))
@@ -765,21 +769,27 @@ public final class TribeCommand {
         return 1;
     }
 
-    // Leaderboard: tribes ranked by claim count (most land first), top 10.
+    // Leaderboard: tribes ranked by claim count (most land first), top 10. Admin land is
+    // excluded -- it's server-owned, has no members, and would otherwise sit atop a board
+    // that's meant to be a competition between players.
     private static int top(CommandSourceStack source) {
         TribeSavedData data = data(source);
-        if (data.getAllTribes().isEmpty()) {
+        List<Tribe> ranked = data.getAllTribes().stream()
+                .filter(t -> !t.isAdminTribe())
+                .sorted((a, b) -> Integer.compare(b.getClaims().size(), a.getClaims().size()))
+                .limit(10)
+                .toList();
+        if (ranked.isEmpty()) {
             source.sendSuccess(Component.literal("There are no tribes yet."), false);
             return 1;
         }
         StringBuilder sb = new StringBuilder("== Top tribes by claims ==");
-        int[] rank = {0};
-        data.getAllTribes().stream()
-                .sorted((a, b) -> Integer.compare(b.getClaims().size(), a.getClaims().size()))
-                .limit(10)
-                .forEach(t -> sb.append("\n").append(++rank[0]).append(". ").append(t.getName())
-                        .append(" — ").append(t.getClaims().size()).append(" chunks (Tier ")
-                        .append(TribeTier.of(t).number()).append(")"));
+        int rank = 0;
+        for (Tribe t : ranked) {
+            sb.append("\n").append(++rank).append(". ").append(t.getName())
+                    .append(" — ").append(t.getClaims().size()).append(" chunks (Tier ")
+                    .append(TribeTier.of(t).number()).append(")");
+        }
         source.sendSuccess(Component.literal(sb.toString()), false);
         return 1;
     }
@@ -945,6 +955,46 @@ public final class TribeCommand {
         }
         data.deleteTribe(tribe);
         source.sendSuccess(Component.literal("Deleted tribe '" + name + "'."), true);
+        return 1;
+    }
+
+    // Admin land: protect the chunk you're standing in under the server-owned "Protected Land"
+    // tribe. Free, with no adjacency requirement and no claim limit -- admin land is meant to
+    // be scattered (spawn, an event build, a landmark), and BlueMap renders each disconnected
+    // group as its own outline. Refuses to take a chunk a player tribe already owns rather
+    // than silently seizing land.
+    private static int adminClaim(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        ClaimPos pos = ClaimPos.of(player.getLevel(), player.blockPosition());
+        Tribe existing = data.getTribeAt(pos);
+        if (existing != null) {
+            source.sendFailure(Component.literal(existing.isAdminTribe()
+                    ? "This chunk is already protected admin land."
+                    : "This chunk is claimed by " + existing.getName()
+                            + ". Have them unclaim it first, or remove the tribe with /tribe admin delete "
+                            + existing.getName() + "."));
+            return 0;
+        }
+        Tribe adminTribe = data.getOrCreateAdminTribe();
+        data.claim(adminTribe, pos);
+        source.sendSuccess(Component.literal("Protected chunk " + pos.chunk().x + ", " + pos.chunk().z
+                + " as admin land. Only operators can build here; chests stay usable and fire won't spread."), true);
+        return 1;
+    }
+
+    private static int adminUnclaim(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        ClaimPos pos = ClaimPos.of(player.getLevel(), player.blockPosition());
+        Tribe owner = data.getTribeAt(pos);
+        if (owner == null || !owner.isAdminTribe()) {
+            source.sendFailure(Component.literal("This chunk isn't admin land."));
+            return 0;
+        }
+        data.unclaim(owner, pos);
+        source.sendSuccess(Component.literal("Released admin land at chunk " + pos.chunk().x + ", "
+                + pos.chunk().z + "."), true);
         return 1;
     }
 

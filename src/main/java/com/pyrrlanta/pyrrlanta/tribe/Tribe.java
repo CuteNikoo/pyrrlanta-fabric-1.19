@@ -41,6 +41,13 @@ public class Tribe {
     // When true, the tribe periodically pays ore upkeep per claim (see TribeTaxCollector).
     private boolean taxesEnabled = false;
 
+    // Marks the server-owned "admin land" tribe. It deliberately has NO members: a player can
+    // only belong to one tribe, so if admins joined this one they'd lose their own. Build
+    // rights on admin land therefore come from OP status rather than membership (see
+    // TribeProtectionEvents.canModify). Claimed via /tribe admin claim; its toggles are fixed
+    // at creation and can't be changed by /tribe toggle, which requires membership.
+    private boolean adminTribe = false;
+
     // Ore balance, funded via /tribe deposit, spent claiming land beyond the founding claim.
     private long treasury = 0;
 
@@ -75,6 +82,27 @@ public class Tribe {
         this.name = name;
         this.leader = leader;
         this.members.put(leader, TribeRole.LEADER);
+    }
+
+    // Colour used for admin land on the web map -- a neutral slate grey, deliberately unlike
+    // the hash-derived hues player tribes get, so "Protected Land" reads as official.
+    private static final int ADMIN_LAND_COLOR = 0x9E9E9E;
+
+    // Builds the server-owned admin land tribe: no members, no real leader, and toggles fixed
+    // to its purpose -- block protection on (players can't build), chest protection off
+    // (chests stay usable), fire spread blocked.
+    static Tribe createAdmin(UUID id, String name) {
+        Tribe tribe = new Tribe(id);
+        tribe.name = name;
+        // There is no real leader. A nil UUID keeps getLeader() non-null so display paths that
+        // print it can't NPE; it never matches a real player.
+        tribe.leader = new UUID(0L, 0L);
+        tribe.adminTribe = true;
+        tribe.protectionEnabled = true;
+        tribe.chestProtectionEnabled = false;
+        tribe.fireSpreadBlocked = true;
+        tribe.color = ADMIN_LAND_COLOR;
+        return tribe;
     }
 
     private Tribe(UUID id) {
@@ -202,6 +230,10 @@ public class Tribe {
         this.open = open;
     }
 
+    public boolean isAdminTribe() {
+        return adminTribe;
+    }
+
     public boolean isTaxesEnabled() {
         return taxesEnabled;
     }
@@ -302,6 +334,7 @@ public class Tribe {
         tag.putBoolean("keepInventory", keepInventory);
         tag.putBoolean("open", open);
         tag.putBoolean("taxesEnabled", taxesEnabled);
+        tag.putBoolean("adminTribe", adminTribe);
         tag.putLong("treasury", treasury);
         tag.putInt("color", color);
 
@@ -372,6 +405,7 @@ public class Tribe {
         tribe.keepInventory = tag.getBoolean("keepInventory");
         tribe.open = tag.getBoolean("open");
         tribe.taxesEnabled = tag.getBoolean("taxesEnabled");
+        tribe.adminTribe = tag.getBoolean("adminTribe");
         tribe.treasury = tag.getLong("treasury");
         tribe.color = tag.contains("color") ? tag.getInt("color") : -1;
 

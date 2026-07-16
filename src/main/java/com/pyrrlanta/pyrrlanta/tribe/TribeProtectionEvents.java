@@ -69,6 +69,12 @@ public final class TribeProtectionEvents {
         if (owner == null || !owner.isProtectionEnabled()) {
             return true;
         }
+        // Admin land has no members, so membership can never grant access there -- OP does
+        // instead. Without this nobody at all could build on it, including the admins who
+        // claimed it.
+        if (owner.isAdminTribe()) {
+            return player.hasPermissions(2);
+        }
         UUID playerId = player.getUUID();
         return owner.isMember(playerId) || owner.isTrusted(playerId);
     }
