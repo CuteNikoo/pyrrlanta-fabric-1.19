@@ -38,6 +38,10 @@ public class TribeConfig {
     public int taxPerClaim = 2;
     // How often taxes are collected, in ticks. Default is 24000 (one Minecraft day).
     public int taxIntervalTicks = 24000;
+    // Master switch for the tribe tier system (tier passives, force-loading, tier-up
+    // announcements). On by default. If false, no tier passives apply and force-loaded chunks
+    // are not maintained.
+    public boolean tierSystemEnabled = true;
 
     public static synchronized TribeConfig get() {
         if (instance == null) {

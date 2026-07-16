@@ -1,11 +1,12 @@
 package com.pyrrlanta.pyrrlanta;
 
 import com.pyrrlanta.pyrrlanta.tribe.TribeCommand;
-import com.pyrrlanta.pyrrlanta.tribe.TribeFireGuard;
+import com.pyrrlanta.pyrrlanta.tribe.TribeForceLoad;
 import com.pyrrlanta.pyrrlanta.tribe.TribeMapIntegration;
 import com.pyrrlanta.pyrrlanta.tribe.TribeMessageEvents;
 import com.pyrrlanta.pyrrlanta.tribe.TribeProtectionEvents;
 import com.pyrrlanta.pyrrlanta.tribe.TribeTaxCollector;
+import com.pyrrlanta.pyrrlanta.tribe.TribeTierEffects;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -29,8 +30,9 @@ public class Pyrrlanta implements ModInitializer {
 		TribeCommand.init();
 		TribeProtectionEvents.init();
 		TribeMessageEvents.init();
-		TribeFireGuard.init();
 		TribeTaxCollector.init();
+		TribeForceLoad.init();
+		TribeTierEffects.init();
 
 		// Only classload TribeMapIntegration (which references BlueMap's API classes
 		// directly) if BlueMap is actually present, or servers without it crash with a

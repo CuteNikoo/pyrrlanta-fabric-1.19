@@ -93,12 +93,23 @@ public final class TribeCommand {
                 .then(Commands.literal("autoclaim")
                         .then(Commands.argument("value", BoolArgumentType.bool())
                                 .executes(ctx -> autoclaim(ctx.getSource(), BoolArgumentType.getBool(ctx, "value")))))
+                .then(Commands.literal("forceload")
+                        .then(Commands.literal("add")
+                                .executes(ctx -> forceload(ctx.getSource(), ForceloadAction.ADD)))
+                        .then(Commands.literal("remove")
+                                .executes(ctx -> forceload(ctx.getSource(), ForceloadAction.REMOVE)))
+                        .then(Commands.literal("list")
+                                .executes(ctx -> forceload(ctx.getSource(), ForceloadAction.LIST))))
                 .then(Commands.literal("info")
                         .executes(ctx -> info(ctx.getSource(), null))
                         .then(Commands.argument("name", StringArgumentType.word())
                                 .executes(ctx -> info(ctx.getSource(), StringArgumentType.getString(ctx, "name")))))
                 .then(Commands.literal("list")
                         .executes(ctx -> list(ctx.getSource())))
+                .then(Commands.literal("top")
+                        .executes(ctx -> top(ctx.getSource())))
+                .then(Commands.literal("balance")
+                        .executes(ctx -> balance(ctx.getSource())))
                 .then(Commands.literal("map")
                         .executes(ctx -> map(ctx.getSource())))
                 .then(Commands.literal("gui")
@@ -142,7 +153,12 @@ public final class TribeCommand {
                         .requires(source -> source.hasPermission(2))
                         .then(Commands.literal("delete")
                                 .then(Commands.argument("name", StringArgumentType.word())
-                                        .executes(ctx -> adminDelete(ctx.getSource(), StringArgumentType.getString(ctx, "name"))))))
+                                        .executes(ctx -> adminDelete(ctx.getSource(), StringArgumentType.getString(ctx, "name")))))
+                        .then(Commands.literal("settier")
+                                .then(Commands.argument("tier", IntegerArgumentType.integer(1, 5))
+                                        .executes(ctx -> adminSetTier(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "tier")))))
+                        .then(Commands.literal("cleartier")
+                                .executes(ctx -> adminClearTier(ctx.getSource()))))
         );
     }
 
@@ -652,6 +668,45 @@ public final class TribeCommand {
         return 1;
     }
 
+    private enum ForceloadAction {
+        ADD, REMOVE, LIST
+    }
+
+    private static int forceload(CommandSourceStack source, ForceloadAction action) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        Tribe tribe = data.getTribeOf(player.getUUID());
+        if (tribe == null) {
+            source.sendFailure(NOT_IN_TRIBE);
+            return 0;
+        }
+        int limit = TribeTier.of(tribe).forceLoadLimit();
+        if (action == ForceloadAction.LIST) {
+            var forced = TribeForceLoad.list(tribe);
+            if (forced.isEmpty()) {
+                source.sendSuccess(Component.literal("No chunks are set to force-load ("
+                        + forced.size() + "/" + limit + " used)."), false);
+                return 1;
+            }
+            String listed = forced.stream()
+                    .map(pos -> pos.chunk().x + ", " + pos.chunk().z)
+                    .collect(Collectors.joining("; "));
+            source.sendSuccess(Component.literal("Force-loaded chunks (" + forced.size() + "/" + limit
+                    + "): " + listed), false);
+            return 1;
+        }
+        if (!tribe.hasPermission(player.getUUID(), TribeRole.OFFICER)) {
+            source.sendFailure(Component.literal("Only officers and the leader can change force-loaded chunks."));
+            return 0;
+        }
+        ClaimPos here = ClaimPos.of(player.getLevel(), player.blockPosition());
+        String result = action == ForceloadAction.ADD
+                ? TribeForceLoad.designate(source.getServer(), data, tribe, here)
+                : TribeForceLoad.undesignate(source.getServer(), data, tribe, here);
+        source.sendSuccess(Component.literal(result), true);
+        return 1;
+    }
+
     private static int info(CommandSourceStack source, String name) throws CommandSyntaxException {
         TribeSavedData data = data(source);
         Tribe tribe;
@@ -669,8 +724,19 @@ public final class TribeCommand {
                 return 0;
             }
         }
+        TribeTier tier = TribeTier.of(tribe);
+        TribeTier nextTier = tier.next();
+        String progress = nextTier == null
+                ? "Max tier reached."
+                : "Next: Tier " + nextTier.number() + " " + nextTier.displayName()
+                        + " needs " + nextTier.minMembers() + " members & " + nextTier.minChunks() + " chunks.";
+        String tierLine = "Tier " + tier.number() + ": " + tier.displayName()
+                + (tribe.getDebugTierOverride() != 0 ? " [debug override]" : "");
         source.sendSuccess(Component.literal(
                 "== " + tribe.getName() + " ==\n"
+                        + tierLine + "\n"
+                        + "Passive: " + tier.passive() + "\n"
+                        + progress + "\n"
                         + "Leader: " + playerName(source, tribe.getLeader()) + "\n"
                         + "Members: " + tribe.getMembers().size() + "\n"
                         + "Claims: " + tribe.getClaims().size() + "\n"
@@ -696,6 +762,37 @@ public final class TribeCommand {
                 .map(t -> t.getName() + " (" + t.getMembers().size() + ")")
                 .collect(Collectors.joining(", "));
         source.sendSuccess(Component.literal("Tribes: " + names), false);
+        return 1;
+    }
+
+    // Leaderboard: tribes ranked by claim count (most land first), top 10.
+    private static int top(CommandSourceStack source) {
+        TribeSavedData data = data(source);
+        if (data.getAllTribes().isEmpty()) {
+            source.sendSuccess(Component.literal("There are no tribes yet."), false);
+            return 1;
+        }
+        StringBuilder sb = new StringBuilder("== Top tribes by claims ==");
+        int[] rank = {0};
+        data.getAllTribes().stream()
+                .sorted((a, b) -> Integer.compare(b.getClaims().size(), a.getClaims().size()))
+                .limit(10)
+                .forEach(t -> sb.append("\n").append(++rank[0]).append(". ").append(t.getName())
+                        .append(" — ").append(t.getClaims().size()).append(" chunks (Tier ")
+                        .append(TribeTier.of(t).number()).append(")"));
+        source.sendSuccess(Component.literal(sb.toString()), false);
+        return 1;
+    }
+
+    private static int balance(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        Tribe tribe = data.getTribeOf(player.getUUID());
+        if (tribe == null) {
+            source.sendFailure(NOT_IN_TRIBE);
+            return 0;
+        }
+        source.sendSuccess(Component.literal(tribe.getName() + " treasury: " + tribe.getTreasury() + " ore."), false);
         return 1;
     }
 
@@ -848,6 +945,53 @@ public final class TribeCommand {
         }
         data.deleteTribe(tribe);
         source.sendSuccess(Component.literal("Deleted tribe '" + name + "'."), true);
+        return 1;
+    }
+
+    // Debug: force the admin's own tribe to a specific tier so its passives can be tested
+    // without meeting the member/claim requirements. Also bumps announcedTier to the forced
+    // value so the fake tier-up isn't broadcast server-wide during testing.
+    private static int adminSetTier(CommandSourceStack source, int tier) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        Tribe tribe = data.getTribeOf(player.getUUID());
+        if (tribe == null) {
+            source.sendFailure(Component.literal("You must be in a tribe to set its tier. "
+                    + "Join or create one first, then run this in it."));
+            return 0;
+        }
+        tribe.setDebugTierOverride(tier);
+        if (tier > tribe.getAnnouncedTier()) {
+            tribe.setAnnouncedTier(tier);
+        }
+        data.setDirty();
+        TribeForceLoad.reconcile(source.getServer(), data, tribe);
+        TribeTier forced = TribeTier.of(tribe);
+        source.sendSuccess(Component.literal("[debug] " + tribe.getName() + " forced to Tier "
+                + forced.number() + " (" + forced.displayName() + "). Passive: " + forced.passive()
+                + " Use /tribe admin cleartier to revert."), true);
+        return 1;
+    }
+
+    // Debug: remove a tier override, returning the tribe to its normally computed tier.
+    private static int adminClearTier(CommandSourceStack source) throws CommandSyntaxException {
+        ServerPlayer player = source.getPlayerOrException();
+        TribeSavedData data = data(source);
+        Tribe tribe = data.getTribeOf(player.getUUID());
+        if (tribe == null) {
+            source.sendFailure(NOT_IN_TRIBE);
+            return 0;
+        }
+        if (tribe.getDebugTierOverride() == 0) {
+            source.sendFailure(Component.literal(tribe.getName() + " has no tier override set."));
+            return 0;
+        }
+        tribe.setDebugTierOverride(0);
+        data.setDirty();
+        TribeForceLoad.reconcile(source.getServer(), data, tribe);
+        TribeTier actual = TribeTier.of(tribe);
+        source.sendSuccess(Component.literal("[debug] Tier override cleared. " + tribe.getName()
+                + " is now Tier " + actual.number() + " (" + actual.displayName() + "), as earned."), true);
         return 1;
     }
 }
