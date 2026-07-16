@@ -32,10 +32,19 @@ import java.util.UUID;
 // and tier-up announcements piggyback on the same tick so a tribe that changes tier updates
 // its allowance and gets announced without any per-command wiring.
 public final class TribeTierEffects {
-    private static final int PASSIVE_INTERVAL_TICKS = 20; // reapply regen/haste every second
+    private static final int PASSIVE_INTERVAL_TICKS = 20; // reapply haste every second
     private static final int GLOW_INTERVAL_TICKS = 10;    // refresh glow twice a second
     private static final int EFFECT_DURATION_TICKS = 60;  // 3s, comfortably outlasts the interval
     private static final int HEARTH_SUPPRESS_TICKS = 200; // 10s of no regen after taking damage
+    // Vanilla's RegenerationMobEffect heals 1 HP whenever `duration % (50 >> amplifier) == 0`,
+    // i.e. every 50 ticks at Regeneration I. Hearth does that heal itself on the same cadence
+    // rather than applying the effect: the heal timing depends on the effect's *remaining*
+    // duration, so periodically re-applying a fixed-duration instance corrupts the rate
+    // (a 60-tick instance refreshed every 20 ticks crosses 50 every cycle and heals ~2.5x too
+    // fast; a 100-tick one would step 100->80 and never heal at all). Doing it directly also
+    // stops the moment a player leaves their claim or takes damage, and never fights with a
+    // regeneration potion the player drank.
+    private static final int HEARTH_HEAL_INTERVAL_TICKS = 50;
     private static final double PACK_RADIUS_SQR = 16.0 * 16.0;
     private static final double LONG_WATCH_RADIUS_SQR = 128.0 * 128.0;
 
@@ -84,7 +93,10 @@ public final class TribeTierEffects {
 
         if (serverTick % PASSIVE_INTERVAL_TICKS == 0) {
             announceAndReconcile(server, data);
-            applyContinuousPassives(server, data);
+            applyPackInstinct(server, data);
+        }
+        if (serverTick % HEARTH_HEAL_INTERVAL_TICKS == 0) {
+            applyHearth(server, data);
         }
         if (serverTick % GLOW_INTERVAL_TICKS == 0) {
             updateGlow(server, data);
@@ -107,23 +119,33 @@ public final class TribeTierEffects {
         }
     }
 
-    private static void applyContinuousPassives(MinecraftServer server, TribeSavedData data) {
+    // Hearth (tier 2+): heal at Regeneration I's rate inside your own claims, unless you've
+    // taken damage within the last 10 seconds. Mirrors vanilla's rule exactly -- 1 HP per
+    // HEARTH_HEAL_INTERVAL_TICKS, and only while below max health.
+    private static void applyHearth(MinecraftServer server, TribeSavedData data) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             Tribe tribe = data.getTribeOf(player.getUUID());
-            if (tribe == null) {
+            if (tribe == null || TribeTier.of(tribe).number() < 2) {
                 continue;
             }
-            int tierNum = TribeTier.of(tribe).number();
-
-            // Hearth (tier 2+): Regeneration I inside your own claims, unless you've taken
-            // damage within the last 10 seconds.
-            if (tierNum >= 2 && standingInOwnClaim(data, player, tribe) && !recentlyDamaged(player)) {
-                player.addEffect(new MobEffectInstance(MobEffects.REGENERATION,
-                        EFFECT_DURATION_TICKS, 0, true, false, true), null);
+            if (player.getHealth() < player.getMaxHealth()
+                    && standingInOwnClaim(data, player, tribe)
+                    && !recentlyDamaged(player)) {
+                player.heal(1.0F);
             }
+        }
+    }
 
-            // Pack Instinct (tier 3+): Haste I while within 16 blocks of an online tribemate.
-            if (tierNum >= 3 && tribemateWithin(server, tribe, player, PACK_RADIUS_SQR)) {
+    // Pack Instinct (tier 3+): Haste I while within 16 blocks of an online tribemate. Haste is
+    // a continuous modifier rather than a periodic-tick effect, so simply refreshing the effect
+    // instance is safe here (unlike Regeneration above).
+    private static void applyPackInstinct(MinecraftServer server, TribeSavedData data) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            Tribe tribe = data.getTribeOf(player.getUUID());
+            if (tribe == null || TribeTier.of(tribe).number() < 3) {
+                continue;
+            }
+            if (tribemateWithin(server, tribe, player, PACK_RADIUS_SQR)) {
                 player.addEffect(new MobEffectInstance(MobEffects.DIG_SPEED,
                         EFFECT_DURATION_TICKS, 0, true, false, true), null);
             }
